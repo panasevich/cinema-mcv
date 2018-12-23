@@ -15,7 +15,8 @@ class CinemaModel {
         this.searchString = init.searchString;
         this.searchBy = '';
         this.sortBy= '';
-        this.request = `${this.searchBy}`;
+        this.request = this.searchBy;
+        this.pageId = null;
     }
 }
 
@@ -25,33 +26,53 @@ class CinemaController {
         this.model = model;
     }
     fetchData(){
-        const { sortBy, searchBy, searchString } = this.model;
+        const { sortBy, searchBy, searchString, pageId } = this.model;
         const sortByParam = sortBy ? `sortBy=${sortBy}&` : '';
         const searchByParam = searchBy ? `searchBy=${searchBy}&` : '';
         const searchStringParam = searchString ? `search=${searchString}&` : '';
         const url = sortByParam || searchByParam || searchStringParam ?
             `http://react-cdp-api.herokuapp.com/movies?${sortByParam}${searchByParam}${searchStringParam}` :
             'http://react-cdp-api.herokuapp.com/movies';
+        console.log(pageId, 'hash');
+        if(pageId){
+            let genre = '';
+            fetch(`http://react-cdp-api.herokuapp.com/movies/${pageId}`)
+                .then(response => response.json())
+                .then(data => {
+                    genre = data.genres[0];
+                 return this.view.renderMovie(data);})
+                .catch(error => error);
+            // fetch(`http://react-cdp-api.herokuapp.com/movies?sortBy=date`)
+            //     .then(response => response.json())
+            //     .then(data => this.view.renderContent({data: data.data}));
+            return;
+        }
         fetch(url)
             .then(response => response.json())
-            .then(data => this.view.render({data: data.data, setField: this.setField }))
+            .then(data => this.view.render({data: data.data, setField: this.setField, setPageId: this.setPageId }))
             .catch(error => error);
     }
     // fetchData();
+    setPageId(data){
+        console.log('asdasd', data);
+        this.model.pageId = data;
+        this.fetchData();
+    }
     setField(fieldName, fieldData) {
-        console.log('setField');
         this.model[fieldName] = fieldData;
         this.fetchData();
     }
     init() {
         this.fetchData();
         this.setField =  this.setField.bind(this);
+        this.setPageId =  this.setPageId.bind(this);
     }
 }
 
-class CounterView {
-    constructor(element) {
-        this.element = element;
+class MoviesView {
+    constructor(header, content) {
+        this.headerBlock = header;
+        this.contentBlock = content;
     }
 
     header(props){
@@ -89,20 +110,38 @@ class CounterView {
                     <h5 class="card-title">${props.title}</h5>
                     <h6 class="card-subtitle">${props.release_date}</h6>
                     ${props.genres.map(v => `<div>${v}</div>` ).join('')}
-                    <button class="btn btn-secondary"><a href="/movie/337167">View</a></button>
+                    <button class="btn btn-secondary" data-id="${props.id}"><a href="#${props.id}">View</a></button>
                 </div>
             </div>
         </div>
         `
     }
-    render(props) {
+    renderMovie(props){
         console.log(props);
-        this.element.innerHTML = `${this.header()} <div class="scroll-row">${props.data.map(v=>this.movie(v)).join('')}</div>`;
+        this.headerBlock.innerHTML = `<div class="search-holder"><div class="movie-wrap clearfix">
+                <img src="${props.poster_path}" class="movie-img" alt="">
+                <div class="movie-data">
+                    <h1 class="movie-title">${props.title}</h1>                    
+                    <h5>${props.tagline}</h5>
+                    <h6>${props.release_date}</h6>
+                    <div>${props.overview}</div>
+                </div>
+            </div></div>`
+    }
+    renderContent(props) {
+        console.log(props, 'renderContent');
+        this.contentBlock.innerHTML = `<div class="scroll-row">${props.data.map(v=>this.movie(v)).join('')}</div>`
+    }
+    render(props) {
+        console.log(props, 'props');
+        this.headerBlock.innerHTML = this.header();
+        this.contentBlock.innerHTML = `<div class="scroll-row">${props.data.map(v=>this.movie(v)).join('')}</div>`;
         setTimeout(()=>{
-            const searchByBtns = element.getElementsByClassName('search-by-item');
-            const sortByBtns = element.getElementsByClassName('sort-by');
+            const searchByBtns = this.headerBlock.getElementsByClassName('search-by-item');
+            const sortByBtns = this.headerBlock.getElementsByClassName('sort-by');
+            const movieBtn = this.contentBlock.querySelectorAll('.card-body > .btn');
+            console.log(movieBtn, 'movireBTN');
             for (let i=0; i <searchByBtns.length; i++) {
-                console.log(searchByBtns);
                 searchByBtns[i].addEventListener('click', function(){
                     props.setField('searchBy', this.getAttribute("data-value"))
                 });
@@ -112,6 +151,13 @@ class CounterView {
                     props.setField('sortBy', this.getAttribute("data-value"))
                 });
             }
+            for (let i=0; i <movieBtn.length; i++) {
+                movieBtn[i].addEventListener('click', function(){
+                    console.log(this.getAttribute("data-id"));
+                    window.scrollTo(0, 0);
+                    props.setPageId(this.getAttribute("data-id"))
+                });
+            }
     }, 500);
     document.getElementById('search-button').addEventListener('click', function(){
         props.setField('searchString', document.getElementById('search-field').value)
@@ -119,17 +165,13 @@ class CounterView {
     }
 }
 
-const element = document.getElementById('header');
+const header = document.getElementById('header');
+const content = document.getElementById('content');
 
-const view = new CounterView(element, ['increment', 'decrement']);
-console.log(view, 'view');
+const view = new MoviesView(header, content);
+
 const model = new CinemaModel(0);
-
-
-
-// const mockProps = {currentValue: 500, increment: ()=> null, decrement: ()=> null};
-// view.render(mockProps);
 
 const controller = new CinemaController(view, model);
 controller.init();
-// controller.init();
+
